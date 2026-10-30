@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="utf-8">
-<title>game</title>
+<title>PlayGTA6 | Browser Game</title>
 <style>
 	html, body { margin: 0; height: 100%; background: #000; color: #ccc; font: 12px monospace; overflow: hidden; }
 	#canvas { display: block; position: absolute; left: 0; top: 0; width: 100vw; height: 100vh; background: #000; }
@@ -39,6 +39,16 @@
 	#fill { height: 100%; width: 0; background: #7cc576; }
 	#hud { position: fixed; left: 8px; bottom: 8px; max-width: 60vw; white-space: pre-wrap; opacity: .8; pointer-events: none; }
 	#fps { position: fixed; left: 8px; top: 6px; display: none; color: #0f0; font: bold 18px/1.2 Consolas, monospace; font-variant-numeric: tabular-nums; text-shadow: 1px 1px 2px #000, 0 0 3px #000; pointer-events: none; z-index: 10; }
+
+	#game-tools { position: fixed; top: 14px; right: 14px; z-index: 20; display: flex; gap: 8px; align-items: flex-start; font: 600 12px/1.2 Arial, sans-serif; }
+	.game-tool { border: 1px solid rgba(255,255,255,.22); border-radius: 7px; padding: 9px 12px; color: #fff; background: rgba(12,15,18,.82); cursor: pointer; backdrop-filter: blur(10px); }
+	.game-tool:hover, .game-tool:focus-visible { background: rgba(48,58,62,.96); outline: 2px solid #8bcf86; outline-offset: 2px; }
+	#game-help { display: none; width: min(290px, calc(100vw - 28px)); padding: 14px 16px; border: 1px solid rgba(255,255,255,.2); border-radius: 9px; color: #e9eeee; background: rgba(8,12,14,.94); box-shadow: 0 12px 36px #0009; backdrop-filter: blur(12px); }
+	#game-help.open { display: block; }
+	#game-help strong { display: block; margin-bottom: 8px; color: #a7d99e; font-size: 13px; }
+	#game-help p { margin: 6px 0; color: #c5cecc; font-weight: 400; }
+	#game-tools button { font: inherit; }
+	@media (max-width: 600px) { #game-tools { top: 8px; right: 8px; gap: 5px; } .game-tool { padding: 8px 10px; } }
 </style>
 </head>
 <body>
@@ -46,6 +56,18 @@
 <div id="hud"></div>
 <div id="loading"><div id="ls-stage"><div id="ls-screens"></div><img id="ls-logo" src="/b/8b0b5899ed/title/logo.png" alt=""><div id="ls-bars"><div id="modes" class="ls-bar"><button data-act="back"></button><button data-act="map5"></button><button data-act="map6"></button><button data-act="sandbox"></button><button data-act="story"></button></div><div class="ls-bar"><span id="label">Starting...</span><span id="pct">0%</span><i class="ls-spin"></i></div></div></div><div id="ls-log"><div id="data"></div><div id="console"></div></div><div id="bar"><div id="fill"></div></div></div>
 <div id="fps"></div>
+<div id="game-tools" aria-label="Game tools">
+	<button class="game-tool" id="help-toggle" type="button" aria-expanded="false" aria-controls="game-help">HELP</button>
+	<button class="game-tool" id="fullscreen-toggle" type="button">FULLSCREEN</button>
+	<section id="game-help" role="region" aria-label="Game controls help">
+		<strong>QUICK CONTROLS</strong>
+		<p>Click the game screen to capture your mouse.</p>
+		<p><b>Esc</b> releases the mouse pointer.</p>
+		<p><b>Shift + P</b> switches keyboard mode.</p>
+		<p><b>=</b> toggles the FPS counter.</p>
+		<p>Choose Story Mode or Sandbox Mode from the loading screen before the world finishes loading.</p>
+	</section>
+</div>
 <script type="module">
 // Page of the browser build. The engine runs in a dedicated worker (loader.js: its "main thread", where the static constructors and
 // main() run and which may block); the page only owns the canvas, which is transferred to that worker and on to the GPU worker.
@@ -598,6 +620,34 @@ function installInput(memory, block) {
 		if (n) { wheelAccum -= n; Atomics.add(w, DZ, n); }
 	}, { passive: false });
 }
+
+	// Small, non-invasive browser controls. The game canvas and engine input remain untouched.
+	{
+		const helpButton = document.getElementById('help-toggle');
+		const helpPanel = document.getElementById('game-help');
+		const fullscreenButton = document.getElementById('fullscreen-toggle');
+		helpButton.addEventListener('click', () => {
+			const open = helpPanel.classList.toggle('open');
+			helpButton.setAttribute('aria-expanded', String(open));
+			helpButton.textContent = open ? 'CLOSE HELP' : 'HELP';
+		});
+		const syncFullscreen = () => {
+			fullscreenButton.textContent = document.fullscreenElement ? 'EXIT FULLSCREEN' : 'FULLSCREEN';
+		};
+		fullscreenButton.addEventListener('click', async () => {
+			try {
+				if (document.fullscreenElement) await document.exitFullscreen();
+				else await document.documentElement.requestFullscreen();
+			} catch (error) {
+				const hud = document.getElementById('hud');
+				hud.textContent = 'Fullscreen is unavailable in this browser. Try pressing F11.';
+				hud.style.color = '#f6c76b';
+			}
+			syncFullscreen();
+		});
+		document.addEventListener('fullscreenchange', syncFullscreen);
+		syncFullscreen();
+	}
 </script>
 </body>
 </html>
