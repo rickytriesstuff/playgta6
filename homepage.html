@@ -57,7 +57,15 @@
 	.setting-actions { display: flex; gap: 8px; margin-top: 14px; }
 	.setting-actions button { flex: 1; }
 	#settings-note { margin: 10px 0 0; color: #9ca9a5; font-size: 11px; line-height: 1.4; font-weight: 400; }
-	@media (max-width: 600px) { #game-tools { top: 8px; right: 8px; gap: 5px; } .game-tool { padding: 8px 10px; } }
+
+	#touch-controls { display: none; position: fixed; inset: auto 0 18px; z-index: 18; padding: 0 18px; align-items: flex-end; justify-content: space-between; pointer-events: none; user-select: none; touch-action: none; }
+	#touch-stick { width: 124px; height: 124px; border: 1px solid #ffffff66; border-radius: 50%; background: #10191b88; position: relative; pointer-events: auto; touch-action: none; box-shadow: inset 0 0 24px #ffffff12; }
+	#touch-knob { position: absolute; left: 50%; top: 50%; width: 48px; height: 48px; margin: -24px; border-radius: 50%; border: 1px solid #ffffff88; background: #c5d5cf55; box-shadow: 0 3px 12px #0008; }
+	#touch-actions { display: grid; grid-template-columns: repeat(2, 58px); gap: 10px; pointer-events: auto; }
+	.touch-action { width: 58px; height: 58px; border-radius: 50%; border: 1px solid #ffffff77; color: #fff; background: #10191b99; font: 700 10px Arial,sans-serif; letter-spacing: .4px; touch-action: none; }
+	.touch-action:active, .touch-action.pressed { background: #8bcf8677; border-color: #c8f2c2; }
+	@media (pointer: coarse) { #touch-controls { display: flex; } #game-tools { transform: scale(.9); transform-origin: top right; } }
+	@media (max-width: 600px) { #game-tools { top: 8px; right: 8px; gap: 5px; } .game-tool { padding: 8px 10px; } #touch-controls { bottom: 12px; padding: 0 12px; } #touch-stick { width: 108px; height: 108px; } #touch-actions { grid-template-columns: repeat(2, 52px); gap: 8px; } .touch-action { width: 52px; height: 52px; } }
 </style>
 </head>
 <body>
@@ -65,6 +73,15 @@
 <div id="hud"></div>
 <div id="loading"><div id="ls-stage"><div id="ls-screens"></div><img id="ls-logo" src="/b/8b0b5899ed/title/logo.png" alt=""><div id="ls-bars"><div id="modes" class="ls-bar"><button data-act="back"></button><button data-act="map5"></button><button data-act="map6"></button><button data-act="sandbox"></button><button data-act="story"></button></div><div class="ls-bar"><span id="label">Starting...</span><span id="pct">0%</span><i class="ls-spin"></i></div></div></div><div id="ls-log"><div id="data"></div><div id="console"></div></div><div id="bar"><div id="fill"></div></div></div>
 <div id="fps"></div>
+<div id="touch-controls" aria-label="Touch game controls">
+	<div id="touch-stick" aria-label="Movement joystick"><div id="touch-knob"></div></div>
+	<div id="touch-actions">
+		<button class="touch-action" type="button" data-key="ShiftLeft">RUN</button>
+		<button class="touch-action" type="button" data-key="Space">JUMP</button>
+		<button class="touch-action" type="button" data-key="KeyF">VEHICLE</button>
+		<button class="touch-action" type="button" data-key="KeyE">ACTION</button>
+	</div>
+</div>
 <div id="game-tools" aria-label="Game tools">
 	<button class="game-tool" id="help-toggle" type="button" aria-expanded="false" aria-controls="game-help">HELP</button>
 	<button class="game-tool" id="fullscreen-toggle" type="button">FULLSCREEN</button>
@@ -593,6 +610,48 @@ function installInput(memory, block) {
 	// and U/O (target left/right) press the same keys for the engine; the real numpad keeps working.
 	const FLY_ALIAS = { KeyI: 'Numpad8', KeyK: 'Numpad2', KeyJ: 'Numpad4', KeyL: 'Numpad6', KeyU: 'Numpad7', KeyO: 'Numpad9' };
 	const held = new Set();
+
+	// Coarse-pointer devices get a virtual joystick and buttons writing into the same engine key buffer.
+	if (matchMedia('(pointer: coarse)').matches) {
+		const controls = document.getElementById('touch-controls');
+		const stick = document.getElementById('touch-stick');
+		const knob = document.getElementById('touch-knob');
+		const virtual = new Set();
+		const keyCode = { KeyW: 0x57, KeyA: 0x41, KeyS: 0x53, KeyD: 0x44, ShiftLeft: 0xA0, Space: 0x20, KeyF: 0x46, KeyE: 0x45 };
+		const setVirtual = (code, down) => {
+			const vk = keyCode[code];
+			if (!vk) return;
+			if (down) virtual.add(code); else virtual.delete(code);
+			Atomics.store(keys, vk, down ? 0x80 : 0);
+		};
+		let stickPointer = null;
+		const releaseStick = () => {
+			for (const code of ['KeyW','KeyA','KeyS','KeyD']) setVirtual(code, false);
+			knob.style.transform = 'translate(0, 0)';
+		};
+		const moveStick = (event) => {
+			const rect = stick.getBoundingClientRect(), cx = rect.left + rect.width / 2, cy = rect.top + rect.height / 2;
+			const dx = event.clientX - cx, dy = event.clientY - cy, radius = rect.width * .34;
+			const distance = Math.hypot(dx, dy), scale = distance > radius ? radius / distance : 1;
+			const x = dx * scale, y = dy * scale, dead = rect.width * .12;
+			knob.style.transform = 'translate(' + x + 'px, ' + y + 'px)';
+			setVirtual('KeyW', y < -dead); setVirtual('KeyS', y > dead);
+			setVirtual('KeyA', x < -dead); setVirtual('KeyD', x > dead);
+		};
+		stick.addEventListener('pointerdown', (event) => {
+			stickPointer = event.pointerId; stick.setPointerCapture(event.pointerId); moveStick(event); event.preventDefault();
+		});
+		stick.addEventListener('pointermove', (event) => { if (event.pointerId === stickPointer) moveStick(event); });
+		const endStick = (event) => { if (event.pointerId !== stickPointer) return; stickPointer = null; releaseStick(); };
+		stick.addEventListener('pointerup', endStick); stick.addEventListener('pointercancel', endStick);
+		controls.querySelectorAll('[data-key]').forEach((button) => {
+			const code = button.dataset.key;
+			button.addEventListener('pointerdown', (event) => { button.setPointerCapture(event.pointerId); button.classList.add('pressed'); setVirtual(code, true); event.preventDefault(); });
+			const up = () => { button.classList.remove('pressed'); setVirtual(code, false); };
+			button.addEventListener('pointerup', up); button.addEventListener('pointercancel', up); button.addEventListener('lostpointercapture', up);
+		});
+		addEventListener('blur', () => { releaseStick(); for (const code of virtual) setVirtual(code, false); });
+	}
 	const syncFlyAlias = () => { for (const [src, target] of Object.entries(FLY_ALIAS)) Atomics.store(keys, VK[target], held.has(src) || held.has(target) ? 0x80 : 0); };
 	addEventListener('keydown', (e) => {
 		if (passThrough(e)) return;
