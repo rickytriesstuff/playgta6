@@ -105,6 +105,20 @@ class Handler(SimpleHTTPRequestHandler):
             self.send_error(400, str(exc))
 
 if __name__ == '__main__':
+    if not ROOT.is_dir():
+        raise SystemExit(
+            "Game files are missing.\n"
+            "Expected folder: %s\n"
+            "Create the folder from your own authorized local game-data copy, "
+            "then try again." % ROOT
+        )
+    missing = [name for name in ('b', 'data') if not (ROOT / name).is_dir()]
+    if missing:
+        raise SystemExit(
+            "The mirror folder is incomplete. Missing: %s\n"
+            "Expected layout: mirror/playgta5.com/b/ and mirror/playgta5.com/data/" %
+            ', '.join(missing)
+        )
     args = argparse.ArgumentParser()
     args.add_argument('--port', type=int, default=8000)
     args.add_argument('--open', action='store_true', help='open the default browser after binding')
